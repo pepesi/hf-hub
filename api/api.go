@@ -274,6 +274,7 @@ type ApiBuilder struct {
 	maxRetries       uint64
 	progress         bool
 	headers          http.Header
+	transport        http.RoundTripper
 }
 
 func NewApiBuilder() (*ApiBuilder, error) {
@@ -337,6 +338,11 @@ func (b *ApiBuilder) WithToken(token string) *ApiBuilder {
 	return b
 }
 
+func (b *ApiBuilder) WithTransport(rt http.RoundTripper) *ApiBuilder {
+	b.transport = rt
+	return b
+}
+
 func (b *ApiBuilder) BuildHeaders() http.Header {
 	headers := make(http.Header)
 	userAgent := fmt.Sprintf("unkown/None; %s/%s; rust/unknown", "hf-hub", "v0.0.1")
@@ -349,9 +355,14 @@ func (b *ApiBuilder) BuildHeaders() http.Header {
 
 func (b *ApiBuilder) Build() *Api {
 	headers := b.BuildHeaders()
-	transport := &http.Transport{Proxy: http.ProxyFromEnvironment}
+	var rt http.RoundTripper
+	if b.transport != nil {
+		rt = b.transport
+	} else {
+		rt = &http.Transport{Proxy: http.ProxyFromEnvironment}
+	}
 	noCDNRedirectClient := &http.Client{
-		Transport: transport,
+		Transport: rt,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return errors.New("stopped after 10 redirects")
@@ -373,7 +384,7 @@ func (b *ApiBuilder) Build() *Api {
 			return http.ErrUseLastResponse
 		},
 	}
-	client := &http.Client{Transport: transport}
+	client := &http.Client{Transport: rt}
 	return &Api{
 		endpoint:            b.endpoint,
 		urlTemplate:         b.urlTemplate,

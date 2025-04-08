@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/schollz/progressbar/v3"
 	"io"
 	"log"
 	"net/http"
@@ -18,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 type RepoType int
@@ -617,6 +618,20 @@ func (r *ApiRepo) Download(filename string) (string, error) {
 	}
 
 	blobPath := r.api.cache.Repo(r.repo.Clone()).BlobPath(metadata.etag)
+	pointerPath := r.api.cache.Repo(r.repo.Clone()).PointerPath(metadata.commitHash)
+	pointerPath = filepath.Join(pointerPath, filename)
+
+	// if pointerPath exists, and blobPath size is same as metadata size, return pointerPath
+	if _, err := os.Stat(pointerPath); err == nil {
+		stat, err := os.Stat(blobPath)
+		if err == nil && stat.Size() == int64(metadata.size) {
+			absPointerPath, err := filepath.Abs(pointerPath)
+			if err != nil {
+				return "", err
+			}
+			return absPointerPath, nil
+		}
+	}
 
 	err = os.MkdirAll(filepath.Dir(blobPath), os.ModePerm)
 	if err != nil {
@@ -649,9 +664,6 @@ func (r *ApiRepo) Download(filename string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	pointerPath := r.api.cache.Repo(r.repo.Clone()).PointerPath(metadata.commitHash)
-	pointerPath = filepath.Join(pointerPath, filename)
 
 	err = os.MkdirAll(filepath.Dir(pointerPath), os.ModePerm)
 	if err != nil {

@@ -272,9 +272,12 @@ type ApiBuilder struct {
 	chunkSize        uint64
 	parallelFailures uint64
 	maxRetries       uint64
-	progress         bool
 	headers          http.Header
 	transport        http.RoundTripper
+	progress         bool
+	// 使用总进度作为进度条
+	totalProgress bool
+	progressBar   Progress
 }
 
 func NewApiBuilder() (*ApiBuilder, error) {
@@ -318,6 +321,19 @@ func (b *ApiBuilder) WithEndpoint(endpoint string) *ApiBuilder {
 
 func (b *ApiBuilder) WithProgress(progress bool) *ApiBuilder {
 	b.progress = progress
+	return b
+}
+
+func (b *ApiBuilder) WithTotalProgressHandler(p Progress) *ApiBuilder {
+	b.progress = true
+	b.totalProgress = true
+	b.progressBar = p
+	return b
+}
+
+func (b *ApiBuilder) WithProgressHandler(p Progress) *ApiBuilder {
+	b.progress = true
+	b.progressBar = p
 	return b
 }
 
@@ -393,6 +409,8 @@ func (b *ApiBuilder) Build() *Api {
 		client:              client,
 		noCDNRedirectClient: noCDNRedirectClient,
 		progress:            b.progress,
+		totalProgress:       b.totalProgress,
+		progressBar:         b.progressBar,
 	}
 
 }
@@ -411,6 +429,8 @@ type Api struct {
 	client              *http.Client
 	noCDNRedirectClient *http.Client
 	progress            bool
+	totalProgress       bool
+	progressBar         Progress
 	meta                *Metadata
 }
 
@@ -438,7 +458,7 @@ func (a *Api) metadata(url string) (*Metadata, error) {
 	}
 
 	if res.StatusCode > 400 {
-		return nil, errors.New(fmt.Sprintf("fail to get metadata, status code %d, status: %s", res.StatusCode, http.StatusText(res.StatusCode)))
+		return nil, fmt.Errorf("fail to get metadata, status code %d, status: %s", res.StatusCode, http.StatusText(res.StatusCode))
 	}
 
 	commitHash := res.Header.Get("x-repo-commit")
@@ -492,7 +512,7 @@ func (a *Api) metadata(url string) (*Metadata, error) {
 	return a.meta, nil
 }
 
-func (a *Api) downloadTempFile(url string, progressbar *progressbar.ProgressBar) (string, error) {
+func (a *Api) downloadTempFile(url string, progress Progress) (string, error) {
 	filename, err := a.cache.TempPath(a.meta.etag)
 	if err != nil {
 		return "", err
@@ -514,7 +534,9 @@ func (a *Api) downloadTempFile(url string, progressbar *progressbar.ProgressBar)
 	stat, _ := file.Stat()
 	if stat.Size() > 0 {
 		if a.meta.size > uint64(stat.Size()) {
-			progressbar.Set64(stat.Size())
+			if !a.totalProgress {
+				progress.Set64(stat.Size())
+			}
 			req.Header.Add("Range", fmt.Sprintf("bytes=%d-", stat.Size()))
 		}
 	}
@@ -526,8 +548,8 @@ func (a *Api) downloadTempFile(url string, progressbar *progressbar.ProgressBar)
 
 	var mw io.Writer
 
-	if progressbar != nil {
-		mw = io.MultiWriter(file, progressbar)
+	if progress != nil {
+		mw = io.MultiWriter(file, progress)
 	} else {
 		mw = file
 	}
@@ -617,6 +639,28 @@ func (r *ApiRepo) Get(filename string) (string, error) {
 	return path, nil
 }
 
+func (r *ApiRepo) TotalSize() (int64, error) {
+	rinfo, err := r.Info()
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for file := range rinfo.Siblings {
+		filename := rinfo.Siblings[file].Rfilename
+		apiUrl, err := r.Url(filename)
+		if err != nil {
+			return 0, err
+		}
+
+		metadata, err := r.api.metadata(apiUrl)
+		if err != nil {
+			return 0, err
+		}
+		total += int(metadata.size)
+	}
+	return 0, nil
+}
+
 func (r *ApiRepo) Download(filename string) (string, error) {
 	apiUrl, err := r.Url(filename)
 	if err != nil {
@@ -648,22 +692,25 @@ func (r *ApiRepo) Download(filename string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var bar *progressbar.ProgressBar
+	var bar Progress
 	if r.api.progress {
-		var message string
-		if len(filename) > 30 {
-			message = fmt.Sprintf("..%s", filename[:30])
+		if r.api.progressBar != nil {
+			bar = r.api.progressBar
 		} else {
-			message = filename
+			var message string
+			if len(filename) > 30 {
+				message = fmt.Sprintf("..%s", filename[:30])
+			} else {
+				message = filename
+			}
+			bar = progressbar.NewOptions64(
+				int64(metadata.size),
+				progressbar.OptionSetDescription(message),
+				progressbar.OptionUseANSICodes(useANSICodes),
+				progressbar.OptionSetPredictTime(true),
+				progressbar.OptionShowBytes(true),
+			)
 		}
-
-		bar = progressbar.NewOptions64(
-			int64(metadata.size),
-			progressbar.OptionSetDescription(message),
-			progressbar.OptionUseANSICodes(useANSICodes),
-			progressbar.OptionSetPredictTime(true),
-			progressbar.OptionShowBytes(true),
-		)
 	}
 
 	tmpFilename, err := r.api.downloadTempFile(apiUrl, bar)
@@ -727,4 +774,25 @@ func (r *ApiRepo) Info() (*RepoInfo, error) {
 func (r *ApiRepo) InfoRequest() (*http.Response, error) {
 	apiUrl := fmt.Sprintf("%s/api/%s", r.api.endpoint, r.repo.ApiUrl())
 	return r.api.client.Get(apiUrl)
+}
+
+func (r *ApiRepo) SnapshotDownload() error {
+	totalsize, err := r.TotalSize()
+	if err != nil {
+		return err
+	}
+	if r.api.progressBar != nil {
+		r.api.progressBar.Set64(totalsize)
+	}
+	rinfo, err := r.Info()
+	if err != nil {
+		return err
+	}
+	for _, sib := range rinfo.Siblings {
+		_, err := r.Download(sib.Rfilename)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

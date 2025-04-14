@@ -8,6 +8,7 @@ import (
 
 type Progress interface {
 	Set64(total int64) error
+	Add(delta int64) error
 	io.Writer
 }
 
@@ -20,6 +21,10 @@ func (p *wrapperProgressBar) Set64(total int64) error {
 }
 func (p *wrapperProgressBar) Write(bs []byte) (int, error) {
 	return p.ProgressBar.Write(bs)
+}
+
+func (p *wrapperProgressBar) Add(delta int64) error {
+	return p.ProgressBar.Add(int(delta))
 }
 
 var _ Progress = &wrapperProgressBar{}
@@ -37,6 +42,11 @@ func (p *TotalProgress) Set64(total int64) error {
 func (p *TotalProgress) Write(bs []byte) (int, error) {
 	p.Current += int64(len(bs))
 	return len(bs), nil
+}
+
+func (p *TotalProgress) Add(delta int64) error {
+	p.Current += delta
+	return nil
 }
 
 var _ Progress = &TotalProgress{}

@@ -658,7 +658,7 @@ func (r *ApiRepo) TotalSize() (int64, error) {
 		}
 		total += int(metadata.size)
 	}
-	return 0, nil
+	return int64(total), nil
 }
 
 func (r *ApiRepo) Download(filename string) (string, error) {
@@ -684,6 +684,11 @@ func (r *ApiRepo) Download(filename string) (string, error) {
 			if err != nil {
 				return "", err
 			}
+			if r.api.progress {
+				if r.api.progressBar != nil {
+					r.api.progressBar.Add(int64(metadata.size))
+				}
+			}
 			return absPointerPath, nil
 		}
 	}
@@ -703,13 +708,14 @@ func (r *ApiRepo) Download(filename string) (string, error) {
 			} else {
 				message = filename
 			}
-			bar = progressbar.NewOptions64(
+			b := progressbar.NewOptions64(
 				int64(metadata.size),
 				progressbar.OptionSetDescription(message),
 				progressbar.OptionUseANSICodes(useANSICodes),
 				progressbar.OptionSetPredictTime(true),
 				progressbar.OptionShowBytes(true),
 			)
+			bar = &wrapperProgressBar{ProgressBar: b}
 		}
 	}
 

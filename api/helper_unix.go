@@ -17,17 +17,17 @@ func symlinkOrRename(src, dst string) error {
 		return nil
 	}
 
-	absSrc, err := filepath.Abs(src)
-	if err != nil {
-		return err
-	}
-
 	absDst, err := filepath.Abs(dst)
 	if err != nil {
 		return err
 	}
+	dstDir := filepath.Dir(absDst)
+	relSrc, err := filepath.Rel(dstDir, src)
+	if err != nil {
+		return err
+	}
 
-	err = os.Symlink(absSrc, absDst)
+	err = os.Symlink(relSrc, absDst)
 	if err != nil && !os.IsExist(err) {
 		return err
 	}

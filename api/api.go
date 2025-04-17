@@ -513,7 +513,7 @@ func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
 	return a.meta, nil
 }
 
-func (a *Api) downloadTempFile(url string, progress Progress) (string, error) {
+func (a *Api) downloadTempFile(ctx context.Context, url string, progress Progress) (string, error) {
 	filename, err := a.cache.TempPath(a.meta.etag)
 	if err != nil {
 		return "", err
@@ -529,6 +529,7 @@ func (a *Api) downloadTempFile(url string, progress Progress) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	req = req.WithContext(ctx)
 
 	req.Header = a.headers.Clone()
 
@@ -720,7 +721,7 @@ func (r *ApiRepo) Download(ctx context.Context, filename string) (string, error)
 		}
 	}
 
-	tmpFilename, err := r.api.downloadTempFile(apiUrl, bar)
+	tmpFilename, err := r.api.downloadTempFile(ctx, apiUrl, bar)
 	if err != nil {
 		return "", err
 	}

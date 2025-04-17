@@ -4,11 +4,13 @@
 package api_test
 
 import (
-	"github.com/seasonjs/hf-hub/api"
+	"context"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/seasonjs/hf-hub/api"
 )
 
 func assert(t *testing.T, a any, b any) {
@@ -19,6 +21,11 @@ func assert(t *testing.T, a any, b any) {
 	t.Log("assert ok")
 }
 
+func init() {
+	// Set the random seed to a fixed value for reproducibility
+	os.Setenv("HF_ENDPOINT", "https://hf-mirror.com")
+}
+
 func TestApi(t *testing.T) {
 	builder, err := api.NewApiBuilder()
 	if err != nil {
@@ -26,8 +33,9 @@ func TestApi(t *testing.T) {
 		return
 	}
 	hapi := builder.WithCacheDir("../tmp").Build()
+	ctx := context.Background()
 
-	downloadedPath, err := hapi.Model("julien-c/dummy-unknown").Download("config.json")
+	downloadedPath, err := hapi.Model("julien-c/dummy-unknown").Download(ctx, "config.json")
 	if err != nil {
 		t.Error(err)
 		return
@@ -46,7 +54,7 @@ func TestApi(t *testing.T) {
 
 	assert(t, sha256, "b908f2b7227d4d31a2105dfa31095e28d304f9bc938bfaaa57ee2cacf1f62d32")
 
-	cachePath, err := hapi.Repo(api.NewRepo("julien-c/dummy-unknown", api.Model)).Get("config.json")
+	cachePath, err := hapi.Repo(api.NewRepo("julien-c/dummy-unknown", api.Model)).Get(ctx, "config.json")
 	if err != nil {
 		t.Error(err)
 		return
@@ -67,8 +75,9 @@ func TestApi_Dataset(t *testing.T) {
 		Build()
 
 	repo := api.NewRepoWithRevision("wikitext", api.Dataset, "refs/convert/parquet")
+	ctx := context.Background()
 
-	downloadedPath, err := hapi.Repo(repo).Download("wikitext-103-v1/test/0000.parquet")
+	downloadedPath, err := hapi.Repo(repo).Download(ctx, "wikitext-103-v1/test/0000.parquet")
 	if err != nil {
 		t.Error(err)
 		return
@@ -99,8 +108,9 @@ func TestApi_Model(t *testing.T) {
 		Build()
 
 	repo := api.NewRepoWithRevision("BAAI/bGe-reRanker-Base", api.Model, "refs/pr/5")
+	ctx := context.Background()
 
-	downloadedPath, err := hapi.Repo(repo).Download("tokenizer.json")
+	downloadedPath, err := hapi.Repo(repo).Download(ctx, "tokenizer.json")
 	if err != nil {
 		t.Error(err)
 		return

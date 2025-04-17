@@ -4,6 +4,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/seasonjs/hf-hub/api"
 )
 
@@ -14,7 +16,8 @@ func main() {
 		return
 	}
 
-	modelPath, err := hapi.Model("bert-base-uncased").Get("config.json")
+	ctx := context.Background()
+	modelPath, err := hapi.Model("bert-base-uncased").Get(ctx, "config.json")
 	if err != nil {
 		print(err.Error())
 		return

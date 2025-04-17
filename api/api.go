@@ -5,6 +5,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -443,7 +444,7 @@ func NewApi() (*Api, error) {
 	return api, nil
 }
 
-func (a *Api) metadata(url string) (*Metadata, error) {
+func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -452,7 +453,7 @@ func (a *Api) metadata(url string) (*Metadata, error) {
 	req.Header = a.headers.Clone()
 	req.Header.Add("Range", "bytes=0-0")
 
-	res, err := a.noCDNRedirectClient.Do(req)
+	res, err := a.noCDNRedirectClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -628,18 +629,18 @@ func (r *ApiRepo) Url(filename string) (string, error) {
 	return buf.String(), nil
 }
 
-func (r *ApiRepo) Get(filename string) (string, error) {
+func (r *ApiRepo) Get(ctx context.Context, filename string) (string, error) {
 	path, err := r.api.cache.Repo(r.repo.Clone()).Get(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return r.Download(filename)
+			return r.Download(ctx, filename)
 		}
 		return "", err
 	}
 	return path, nil
 }
 
-func (r *ApiRepo) TotalSize() (int64, error) {
+func (r *ApiRepo) TotalSize(ctx context.Context) (int64, error) {
 	rinfo, err := r.Info()
 	if err != nil {
 		return 0, err
@@ -652,7 +653,7 @@ func (r *ApiRepo) TotalSize() (int64, error) {
 			return 0, err
 		}
 
-		metadata, err := r.api.metadata(apiUrl)
+		metadata, err := r.api.metadata(ctx, apiUrl)
 		if err != nil {
 			return 0, err
 		}
@@ -661,13 +662,13 @@ func (r *ApiRepo) TotalSize() (int64, error) {
 	return int64(total), nil
 }
 
-func (r *ApiRepo) Download(filename string) (string, error) {
+func (r *ApiRepo) Download(ctx context.Context, filename string) (string, error) {
 	apiUrl, err := r.Url(filename)
 	if err != nil {
 		return "", err
 	}
 
-	metadata, err := r.api.metadata(apiUrl)
+	metadata, err := r.api.metadata(ctx, apiUrl)
 	if err != nil {
 		return "", err
 	}
@@ -782,8 +783,8 @@ func (r *ApiRepo) InfoRequest() (*http.Response, error) {
 	return r.api.client.Get(apiUrl)
 }
 
-func (r *ApiRepo) SnapshotDownload() error {
-	totalsize, err := r.TotalSize()
+func (r *ApiRepo) SnapshotDownload(ctx context.Context) error {
+	totalsize, err := r.TotalSize(ctx)
 	if err != nil {
 		return err
 	}
@@ -795,7 +796,7 @@ func (r *ApiRepo) SnapshotDownload() error {
 		return err
 	}
 	for _, sib := range rinfo.Siblings {
-		_, err := r.Download(sib.Rfilename)
+		_, err := r.Download(ctx, sib.Rfilename)
 		if err != nil {
 			return err
 		}

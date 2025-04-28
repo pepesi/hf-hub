@@ -475,7 +475,14 @@ func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
 		}
 	}
 	etag = strings.ReplaceAll(etag, "\"", "")
-
+	var size uint64
+	contentlength := res.Header.Get("Content-Length")
+	if len(contentlength) > 0 {
+		size, err = strconv.ParseUint(contentlength, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if 300 <= res.StatusCode && res.StatusCode <= 400 {
 		location := res.Header.Get("Location")
 
@@ -491,23 +498,21 @@ func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
 		if err != nil {
 			return nil, err
 		}
-	}
+		contentRange := res.Header.Get("Content-Range")
+		contentRanges := strings.Split(contentRange, "/")
+		contentRange = contentRanges[len(contentRanges)-1]
+		if len(contentRange) == 0 {
+			size, err = strconv.ParseUint(res.Header.Get("Content-Length"), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			size, err = strconv.ParseUint(contentRange, 10, 64)
+			if err != nil {
+				return nil, err
+			}
 
-	contentRange := res.Header.Get("Content-Range")
-	contentRanges := strings.Split(contentRange, "/")
-	contentRange = contentRanges[len(contentRanges)-1]
-	var size uint64
-	if len(contentRange) == 0 {
-		size, err = strconv.ParseUint(res.Header.Get("Content-Length"), 10, 64)
-		if err != nil {
-			return nil, err
 		}
-	} else {
-		size, err = strconv.ParseUint(contentRange, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-
 	}
 
 	a.meta = &Metadata{

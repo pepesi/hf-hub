@@ -471,7 +471,7 @@ func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
 	if len(etag) == 0 {
 		etag = res.Header.Get("etag")
 		if len(etag) == 0 {
-			return nil, errors.New("miss header etag")
+			return nil, fmt.Errorf("miss header etag for %s", url)
 		}
 	}
 	etag = strings.ReplaceAll(etag, "\"", "")
@@ -497,7 +497,7 @@ func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
 	contentRanges := strings.Split(contentRange, "/")
 	contentRange = contentRanges[len(contentRanges)-1]
 	if len(contentRange) == 0 {
-		return nil, errors.New("miss header content-range")
+		return nil, fmt.Errorf("miss header Content-Range for %s", url)
 	}
 
 	size, err := strconv.ParseUint(contentRange, 10, 64)

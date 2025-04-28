@@ -496,13 +496,18 @@ func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
 	contentRange := res.Header.Get("Content-Range")
 	contentRanges := strings.Split(contentRange, "/")
 	contentRange = contentRanges[len(contentRanges)-1]
+	var size uint64
 	if len(contentRange) == 0 {
-		return nil, fmt.Errorf("miss header Content-Range for %s", url)
-	}
+		size, err = strconv.ParseUint(res.Header.Get("Content-Length"), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		size, err = strconv.ParseUint(contentRange, 10, 64)
+		if err != nil {
+			return nil, err
+		}
 
-	size, err := strconv.ParseUint(contentRange, 10, 64)
-	if err != nil {
-		return nil, err
 	}
 
 	a.meta = &Metadata{

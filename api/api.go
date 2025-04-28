@@ -464,7 +464,7 @@ func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
 
 	commitHash := res.Header.Get("x-repo-commit")
 	if len(commitHash) == 0 {
-		return nil, errors.New("miss header commit-hash")
+		return nil, fmt.Errorf("miss header x-repo-commit for %s", url)
 	}
 
 	etag := res.Header.Get("x-linked-etag")

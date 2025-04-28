@@ -445,7 +445,7 @@ func NewApi() (*Api, error) {
 }
 
 func (a *Api) metadata(ctx context.Context, url string) (*Metadata, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodHead, url, nil)
 	if err != nil {
 		return nil, err
 	}
